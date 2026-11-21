@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!-- dark-mode guide: MANDATORY – declare support for both themes before rendering -->
+  <meta name="color-scheme" content="dark light" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天刀·帮派定时点歌台（周四/周日 19:30–20:20）</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       顶部播控区（封面 / 歌名 / 进度 / 电平 / 控制按钮）
+  ═══════════════════════════════════════════════════════════════ -->
+  <header class="player-bar" id="player-bar" aria-label="播控中心">
+
+    <!-- 封面 -->
+    <img id="cover-img" class="cover-thumb" src="" alt="封面" width="72" height="72" />
+
+    <!-- 歌曲信息 -->
+    <div class="track-info">
+      <div class="track-title" id="track-title">（待播）</div>
+      <div class="track-artist" id="track-artist">—</div>
+      <span class="track-source" id="track-source"></span>
+    </div>
+
+    <!-- 进度条 -->
+    <div class="progress-wrap">
+      <label for="seek-slider" class="sr-only">播放进度</label>
+      <input type="range" id="seek-slider" class="seek-slider" min="0" max="100" value="0" step="0.5" aria-label="播放进度" />
+      <div class="progress-time">
+        <span id="pos-time">0:00</span>
+        <span> / </span>
+        <span id="dur-time">0:00</span>
+      </div>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="ctrl-btns" role="group" aria-label="播放控制">
+      <button type="button" id="btn-playpause" class="ctrl-btn" aria-label="播放/暂停" title="播放/暂停">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+          <path id="playpause-icon" d="M8 5v14l11-7z"/>
+        </svg>
+      </button>
+      <button type="button" id="btn-skip" class="ctrl-btn" aria-label="切歌（下一首）" title="切歌">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+          <path d="M6 18l8.5-6L6 6v12zm8.5-6L23 18V6z"/>
+        </svg>
+      </button>
+      <button type="button" id="btn-autodj" class="ctrl-btn ctrl-btn--toggle" aria-label="时段内空队列自动放歌" title="时段内空队列自动放歌" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+          <path d="M12 1a9 9 0 0 1 9 9v5h-2v-5a7 7 0 1 0-14 0v5H3v-5a9 9 0 0 1 9-9zm-1 14h2v6h-2v-6zm-4 2h2v4H7v-4zm8 0h2v4h-2v-4z"/>
+        </svg>
+      </button>
+      <button type="button" id="btn-testtone" class="ctrl-btn ctrl-btn--warn"
+              aria-label="发送 440 Hz 测试音 3 秒（将从游戏麦克风输出！）"
+              title="⚠️ 发送 3s 440Hz 测试音">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+          <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- 双路实时电平 -->
+    <div class="meter-panel" aria-label="实时电平">
+      <div class="meter-row">
+        <span class="meter-label">推流虚拟麦</span>
+        <div class="meter-bar-wrap">
+          <div class="meter-bar" id="meter-broadcast" role="meter" aria-label="推流虚拟麦峰值" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"></div>
+        </div>
+        <span class="meter-val" id="meter-broadcast-val">—</span>
+        <span class="meter-unit">dBFS</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label">物理麦克风</span>
+        <div class="meter-bar-wrap">
+          <div class="meter-bar meter-bar--mic" id="meter-mic" role="meter" aria-label="物理麦克风峰值" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"></div>
+        </div>
+        <span class="meter-val" id="meter-mic-val">—</span>
+        <span class="meter-unit">dBFS</span>
+      </div>
+      <div class="ducking-indicator" id="ducking-indicator" aria-live="polite" aria-label="自动闪避状态">
+        自动闪避生效 (-12 dB)
+      </div>
+    </div>
+
+  </header>
+
+  <!-- 测试音确认 dialog（dialog guide: native <dialog> + showModal()） -->
+  <dialog id="testtone-confirm" aria-labelledby="testtone-title">
+    <h2 id="testtone-title">⚠️ 发送测试音</h2>
+    <p>将向虚拟声卡 (CABLE Input) 发送 <strong>3 秒 440 Hz</strong> 测试音。<br>
+       天刀/模拟器中的帮派成员将会听到！<br>
+       请确认已无人正在说话。</p>
+    <!-- dialog guide: form method="dialog" + autofocus on safe action -->
+    <form method="dialog" class="dialog-actions">
+      <button type="submit" value="cancel" autofocus class="btn btn-secondary">取消</button>
+      <button type="submit" value="confirm" class="btn btn-danger">确认发送</button>
+    </form>
+  </dialog>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       主 Tab 区
+  ═══════════════════════════════════════════════════════════════ -->
+  <main class="main-layout">
+
+    <!-- tabs guide: focusgroup="tablist nomemory" + aria-selected + hidden="until-found" -->
+    <div class="tabs-container">
+      <div class="tablist-wrap" focusgroup="tablist nomemory" aria-label="功能模块" role="tablist">
+        <button type="button" id="tab-queue" class="tab" aria-selected="true" focusgroupstart
+                aria-controls="panel-queue">
+          🎵 点歌台
+        </button>
+        <button type="button" id="tab-audio" class="tab" aria-selected="false"
+                aria-controls="panel-audio">
+          🔊 声卡路由
+        </button>
+        <button type="button" id="tab-ocr" class="tab" aria-selected="false"
+                aria-controls="panel-ocr">
+          👁️ OCR识别
+        </button>
+        <button type="button" id="tab-ytm" class="tab" aria-selected="false"
+                aria-controls="panel-ytm">
+          📋 曲库/电台
+        </button>
+      </div>
+
+      <!-- Panel 1: 点歌台 -->
+      <div id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" tabindex="0" class="tab-panel">
+        <div class="panel-inner">
+
+          <!-- 定时播控横幅与配置 -->
+          <section class="schedule-banner schedule-banner--standby" id="schedule-banner" aria-label="定时播音控制">
+            <div class="schedule-top-row">
+              <div id="schedule-status-text" class="schedule-status-text" aria-live="polite">
+                正在读取定时播音状态…
+              </div>
+              <button type="button" id="btn-schedule-override" class="btn btn-sm btn-secondary">
+                ▶ 临时试播
+              </button>
+            </div>
+            <details class="schedule-details" id="schedule-details">
+              <summary class="schedule-summary">⚙️ 定时播音时段设置（默认：每周四、周日 19:30–20:20）</summary>
+              <form id="schedule-config-form" class="schedule-form" aria-label="定时播音参数">
+                <div class="form-row">
+                  <label for="sw-schedule-enabled" class="form-label">仅定时时段开播与识别</label>
+                  <input type="checkbox" id="sw-schedule-enabled" class="form-switch" name="enabled" role="switch" switch checked />
+                  <span class="hint-text">开启后，非定时时段彻底静音且停止 OCR 扫描（0 占用）</span>
+                </div>
+                <div class="form-row schedule-days-row">
+                  <span class="form-label">播音星期</span>
+                  <div class="weekday-group" role="group" aria-label="选择播音星期">
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="0" /><span>周一</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="1" /><span>周二</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="2" /><span>周三</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="3" checked /><span>周四</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="4" /><span>周五</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="5" /><span>周六</span></label>
+                    <label class="weekday-chip"><input type="checkbox" name="sched_day" value="6" checked /><span>周日</span></label>
+                  </div>
+                </div>
+                <div class="form-row schedule-time-row">
+                  <label for="inp-sched-start" class="form-label">开播时间段</label>
+                  <div class="time-range-wrap">
+                    <input type="time" id="inp-sched-start" class="text-input text-input--time" name="start" value="19:30" required />
+                    <span class="time-sep">—</span>
+                    <input type="time" id="inp-sched-end" class="text-input text-input--time" name="end" value="20:20" required />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label for="sw-sched-clear-end" class="form-label">时段结束清空剩余队列</label>
+                  <input type="checkbox" id="sw-sched-clear-end" class="form-switch" name="clear_queue_on_end" role="switch" switch checked />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-sm btn-primary">💾 保存定时设置</button>
+                </div>
+              </form>
+            </details>
+          </section>
+
+          <!-- 局域网分享提示条 -->
+          <div class="lan-banner" id="lan-banner" aria-live="polite">
+            <span id="lan-url-text">正在获取局域网地址…</span>
+            <button type="button" id="btn-copy-lan" class="btn btn-sm">复制地址</button>
+            <span class="lan-tip">（手机或队友可扫码/粘贴地址直接点歌）</span>
+          </div>
+
+          <div class="queue-layout">
+            <!-- 左：点歌输入 + 队列 -->
+            <div class="queue-left">
+              <section aria-labelledby="add-heading">
+                <h2 id="add-heading" class="section-heading">一键点歌</h2>
+                <div class="add-form">
+                  <label for="song-input" class="sr-only">输入歌名-歌手或关键字</label>
+                  <input type="text" id="song-input" class="text-input" placeholder="歌名-歌手 或 关键字" autocomplete="off" />
+                  <label for="requester-input" class="sr-only">点歌人昵称</label>
+                  <input type="text" id="requester-input" class="text-input text-input--sm" placeholder="少侠昵称（选填）" autocomplete="off" />
+                  <div class="add-btns">
+                    <button type="button" id="btn-add-song" class="btn btn-primary">🎵 智能点歌</button>
+                    <button type="button" id="btn-add-top" class="btn btn-secondary">⬆ 置顶插播</button>
+                  </div>
+                </div>
+              </section>
+
+              <section aria-labelledby="queue-heading" class="queue-section">
+                <div class="section-heading-row">
+                  <h2 id="queue-heading" class="section-heading">当前队列</h2>
+                  <button type="button" id="btn-clear-queue" class="btn btn-sm btn-danger-soft">清空队列</button>
+                </div>
+                <ol id="queue-list" class="queue-list" aria-label="播放队列" aria-live="polite"></ol>
+              </section>
+
+              <section aria-labelledby="history-heading" class="history-section">
+                <h2 id="history-heading" class="section-heading">最近播放</h2>
+                <ul id="history-list" class="history-list" aria-label="最近播放" aria-live="polite"></ul>
+              </section>
+            </div>
+
+            <!-- 右：YouTube Music 搜索 -->
+            <div class="queue-right">
+              <section aria-labelledby="search-heading">
+                <h2 id="search-heading" class="section-heading">YouTube Music 搜索</h2>
+                <div class="search-form">
+                  <label for="ytm-search-input" class="sr-only">搜索曲库</label>
+                  <input type="search" id="ytm-search-input" class="text-input" placeholder="搜歌名 / 歌手…" autocomplete="off" />
+                  <button type="button" id="btn-ytm-search" class="btn btn-primary">搜索</button>
+                </div>
+                <ul id="ytm-results" class="ytm-results" aria-label="搜索结果" aria-live="polite"></ul>
+              </section>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Panel 2: 声卡路由 -->
+      <div id="panel-audio" role="tabpanel" aria-labelledby="tab-audio" hidden class="tab-panel">
+        <div class="panel-inner">
+
+          <!-- VB-CABLE 状态横幅 -->
+          <div id="vbcable-banner" class="status-banner" aria-live="polite" role="status" hidden>
+            <strong>⚠️ 未检测到 VB-CABLE 虚拟声卡</strong><br/>
+            <span>请按以下 3 步操作完成安装：</span>
+            <ol class="install-steps">
+              <li>以管理员运行 <code>scripts\install_vbcable.ps1</code>，按提示安装驱动并重启音频服务；</li>
+              <li>在天刀 / 模拟器声音设置中，将「麦克风输入」选为 <strong>CABLE Output (VB-Audio)</strong>；</li>
+              <li>点击下方「<strong>重新扫描声卡</strong>」刷新设备列表。</li>
+            </ol>
+          </div>
+          <div id="vbcable-ok-banner" class="status-banner status-banner--ok" aria-live="polite" role="status" hidden>
+            ✅ VB-CABLE 已安装，双路隔离路由就绪。
+          </div>
+
+          <!-- 信号拓扑 SVG -->
+          <details class="topo-details" open>
+            <summary class="section-heading">信号拓扑图（点击折叠）</summary>
+            <figure class="topo-figure" aria-label="音频信号拓扑图">
+              <svg class="topo-svg" viewBox="0 0 760 200" role="img" aria-labelledby="topo-title">
+                <title id="topo-title">VB-CABLE 双路隔离信号拓扑</title>
+                <!-- 节点 -->
+                <rect x="10" y="70" width="120" height="40" rx="6" fill="#2d3a4a" stroke="#4a9eff" stroke-width="1.5"/>
+                <text x="70" y="94" text-anchor="middle" fill="#c8d8e8" font-size="12">🎵 云音坊音乐</text>
+
+                <rect x="10" y="130" width="120" height="40" rx="6" fill="#2d3a4a" stroke="#ff7a4a" stroke-width="1.5"/>
+                <text x="70" y="154" text-anchor="middle" fill="#c8d8e8" font-size="12">🎤 物理麦克风</text>
+
+                <rect x="200" y="90" width="130" height="40" rx="6" fill="#1a2a1a" stroke="#4aff7a" stroke-width="1.5"/>
+                <text x="265" y="110" text-anchor="middle" fill="#8fffb0" font-size="11">CABLE Input</text>
+                <text x="265" y="124" text-anchor="middle" fill="#8fffb0" font-size="10">(虚拟声卡推流端)</text>
+
+                <rect x="400" y="90" width="130" height="40" rx="6" fill="#1a1a2a" stroke="#ff4aff" stroke-width="1.5"/>
+                <text x="465" y="110" text-anchor="middle" fill="#ffb0ff" font-size="11">CABLE Output</text>
+                <text x="465" y="124" text-anchor="middle" fill="#ffb0ff" font-size="10">(虚拟麦克风输入)</text>
+
+                <rect x="610" y="70" width="140" height="40" rx="6" fill="#2a1a2a" stroke="#ff4aff" stroke-width="1.5"/>
+                <text x="680" y="90" text-anchor="middle" fill="#ffb0ff" font-size="11">🎮 天刀/模拟器</text>
+                <text x="680" y="104" text-anchor="middle" fill="#ffb0ff" font-size="10">帮派语音麦克风</text>
+
+                <rect x="610" y="130" width="140" height="40" rx="6" fill="#2a1a1a" stroke="#4a9eff" stroke-width="1.5"/>
+                <text x="680" y="150" text-anchor="middle" fill="#c8d8e8" font-size="11">🎧 物理耳机</text>
+                <text x="680" y="164" text-anchor="middle" fill="#c8d8e8" font-size="10">本地监听（仅音乐）</text>
+
+                <!-- 箭头 -->
+                <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#aaa"/>
+                </marker></defs>
+                <line x1="130" y1="90" x2="198" y2="108" stroke="#4aff7a" stroke-width="1.5" marker-end="url(#arr)"/>
+                <line x1="130" y1="150" x2="198" y2="118" stroke="#4aff7a" stroke-width="1.5" marker-end="url(#arr)"/>
+                <line x1="330" y1="110" x2="398" y2="110" stroke="#aaa" stroke-width="1.5" marker-end="url(#arr)"/>
+                <line x1="530" y1="100" x2="608" y2="90" stroke="#ff4aff" stroke-width="1.5" marker-end="url(#arr)"/>
+                <line x1="265" y1="90" x2="265" y2="62" stroke="#4a9eff" stroke-width="1" stroke-dasharray="4,3"/>
+                <line x1="265" y1="62" x2="665" y2="62" stroke="#4a9eff" stroke-width="1" stroke-dasharray="4,3"/>
+                <line x1="665" y1="62" x2="665" y2="128" stroke="#4a9eff" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+                <text x="460" y="56" text-anchor="middle" fill="#4a9eff" font-size="10">本地监听（纯音乐，永不串音）</text>
+              </svg>
+              <figcaption class="topo-caption">
+                音乐 + 物理麦 → CABLE Input → CABLE Output → 游戏帮派麦<br>
+                游戏/队友声音 → 物理耳机 &nbsp;|&nbsp; 双路完全隔离，永不回声串麦
+              </figcaption>
+            </figure>
+          </details>
+
+          <!-- 路由配置表单 -->
+          <form id="audio-config-form" class="audio-form" aria-label="音频路由配置">
+            <div class="form-section">
+              <h3 class="form-section-title">推流路径（CABLE Input）</h3>
+              <div class="form-row">
+                <label for="sel-virtual-out" class="form-label">推流目标声卡</label>
+                <select id="sel-virtual-out" class="form-select" name="virtual_out_device_id"></select>
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-broadcast-vol" class="form-label">推流音量</label>
+                <input type="range" id="sl-broadcast-vol" class="form-slider" name="broadcast_volume" min="0" max="1" step="0.01" value="0.9" />
+                <output for="sl-broadcast-vol" id="out-broadcast-vol" class="slider-val">90%</output>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3 class="form-section-title">本地耳机监听</h3>
+              <div class="form-row">
+                <label for="sel-monitor-out" class="form-label">监听输出设备</label>
+                <select id="sel-monitor-out" class="form-select" name="monitor_out_device_id"></select>
+              </div>
+              <div class="form-row">
+                <label for="sw-monitor" class="form-label">监听开关</label>
+                <input type="checkbox" id="sw-monitor" class="form-switch" name="monitor_enabled" role="switch" />
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-monitor-vol" class="form-label">监听音量</label>
+                <input type="range" id="sl-monitor-vol" class="form-slider" name="monitor_volume" min="0" max="1" step="0.01" value="0.7" />
+                <output for="sl-monitor-vol" id="out-monitor-vol" class="slider-val">70%</output>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3 class="form-section-title">物理麦克风混音</h3>
+              <div class="form-row">
+                <label for="sw-mic" class="form-label">麦克风混音</label>
+                <input type="checkbox" id="sw-mic" class="form-switch" name="mic_bridge_enabled" role="switch" />
+              </div>
+              <div class="form-row">
+                <label for="sel-mic-in" class="form-label">麦克风输入设备</label>
+                <select id="sel-mic-in" class="form-select" name="mic_in_device_id"></select>
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-mic-vol" class="form-label">人声增益</label>
+                <input type="range" id="sl-mic-vol" class="form-slider" name="mic_volume" min="0" max="2" step="0.01" value="1.0" />
+                <output for="sl-mic-vol" id="out-mic-vol" class="slider-val">1.00×</output>
+              </div>
+              <div class="form-row">
+                <label for="sw-ducking" class="form-label">自动闪避（说话时音乐 -12 dB）</label>
+                <input type="checkbox" id="sw-ducking" class="form-switch" name="ducking_enabled" role="switch" />
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-duck-thresh" class="form-label">触发阈值</label>
+                <input type="range" id="sl-duck-thresh" class="form-slider" name="duck_threshold_db" min="-60" max="-10" step="1" value="-38" />
+                <output for="sl-duck-thresh" id="out-duck-thresh" class="slider-val">-38 dBFS</output>
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-duck-depth" class="form-label">压低深度</label>
+                <input type="range" id="sl-duck-depth" class="form-slider" name="ducking_db" min="-24" max="-3" step="1" value="-12" />
+                <output for="sl-duck-depth" id="out-duck-depth" class="slider-val">-12 dB</output>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="btn-refresh-devices" class="btn btn-secondary">🔄 重新扫描声卡</button>
+              <button type="submit" class="btn btn-primary">💾 保存路由配置</button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+
+      <!-- Panel 3: OCR 识别 -->
+      <div id="panel-ocr" role="tabpanel" aria-labelledby="tab-ocr" hidden class="tab-panel">
+        <div class="panel-inner">
+          <h2 class="section-heading">帮派聊天框视觉框选（OCR 识别）</h2>
+
+          <!-- 窗口扫描 -->
+          <div class="ocr-windows-row">
+            <button type="button" id="btn-scan-windows" class="btn btn-secondary">🔍 扫描游戏窗口</button>
+            <select id="sel-game-window" class="form-select" aria-label="检测到的游戏窗口"></select>
+            <button type="button" id="btn-use-window" class="btn btn-sm">使用此窗口坐标</button>
+          </div>
+
+          <!-- 桌面截图 Canvas -->
+          <div class="canvas-section">
+            <div class="canvas-toolbar">
+              <button type="button" id="btn-refresh-screenshot" class="btn btn-secondary">📸 刷新桌面截图</button>
+              <span class="canvas-tip">在截图上拖拽鼠标绘制绿色选框以框选帮派聊天区域</span>
+            </div>
+            <div class="canvas-wrap" id="canvas-wrap">
+              <canvas id="screenshot-canvas" width="800" height="450" aria-label="桌面截图（可拖拽框选 ROI）" tabindex="0"></canvas>
+              <div class="canvas-placeholder" id="canvas-placeholder">点击「刷新桌面截图」加载屏幕画面</div>
+            </div>
+            <div class="roi-info" id="roi-info" aria-live="polite"></div>
+          </div>
+
+          <!-- ROI 预览 -->
+          <div class="roi-preview-row">
+            <button type="button" id="btn-roi-preview" class="btn btn-sm">🔍 查看当前 ROI 裁剪预览</button>
+            <img id="roi-preview-img" class="roi-preview-img" src="" alt="ROI 裁剪预览" hidden />
+          </div>
+
+          <!-- OCR 配置表单 -->
+          <form id="ocr-config-form" class="ocr-form audio-form" aria-label="OCR 配置">
+            <div class="form-section">
+              <h3 class="form-section-title">OCR 参数配置</h3>
+              <div class="form-row">
+                <label for="sw-ocr-enabled" class="form-label">启用 OCR 自动识别</label>
+                <input type="checkbox" id="sw-ocr-enabled" class="form-switch" name="enabled" role="switch" />
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-interval" class="form-label">识别间隔</label>
+                <input type="range" id="sl-interval" class="form-slider" name="interval_sec" min="1" max="300" step="1" value="30" />
+                <output for="sl-interval" id="out-interval" class="slider-val">30 s</output>
+              </div>
+              <div id="ocr-schedule-badge" class="hint-text" aria-live="polite">活动高峰自动提速：每周四、周日 19:30–20:20 自动切换为 8 s</div>
+              <div class="form-row">
+                <label for="sel-trigger-mode" class="form-label">触发模式</label>
+                <select id="sel-trigger-mode" class="form-select" name="trigger_mode">
+                  <option value="both">both（前缀 + 直接发歌名）</option>
+                  <option value="prefix">prefix（严格：点歌：歌名-歌手 / 切歌：歌名-歌手）</option>
+                </select>
+              </div>
+              <div class="form-row slider-row">
+                <label for="sl-cooldown" class="form-label">冷却时间（同一首歌）</label>
+                <input type="range" id="sl-cooldown" class="form-slider" name="cooldown_sec" min="10" max="600" step="10" value="300" />
+                <output for="sl-cooldown" id="out-cooldown" class="slider-val">300 s</output>
+              </div>
+              <div class="form-row">
+                <label for="sw-allow-skip" class="form-label">允许「切歌」指令</label>
+                <input type="checkbox" id="sw-allow-skip" class="form-switch" name="allow_skip_cmd" role="switch" checked />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">💾 保存 OCR 配置</button>
+            </div>
+          </form>
+
+          <!-- OCR 自检 -->
+          <div class="ocr-test-section">
+            <h3 class="section-heading">一键 OCR 自检</h3>
+            <p class="hint-text">使用模拟帮派聊天图验证 OCR 识别效果（不影响生产环境）</p>
+            <button type="button" id="btn-ocr-test" class="btn btn-secondary">🧪 用模拟图一键自检</button>
+            <pre id="ocr-test-result" class="result-pre" aria-live="polite" aria-label="OCR 自检结果"></pre>
+          </div>
+
+          <!-- 识别日志 -->
+          <div class="ocr-log-section" aria-labelledby="ocr-log-heading">
+            <h3 id="ocr-log-heading" class="section-heading">最近识别日志（最多 30 条）</h3>
+            <ul id="ocr-log-list" class="ocr-log-list" aria-live="polite" aria-label="OCR 识别日志"></ul>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Panel 4: YouTube Music 曲库/电台 -->
+      <div id="panel-ytm" role="tabpanel" aria-labelledby="tab-ytm" hidden class="tab-panel">
+        <div class="panel-inner">
+
+          <!-- YTM 绑定 -->
+          <section aria-labelledby="ytm-auth-heading">
+            <h2 id="ytm-auth-heading" class="section-heading">YouTube Music 账号绑定</h2>
+            <details class="auth-guide">
+              <summary>📖 获取 Cookie / 请求头说明</summary>
+              <div class="guide-body">
+                <ol>
+                  <li>在浏览器打开 <strong>music.youtube.com</strong>，确保已登录。</li>
+                  <li>按 <kbd>F12</kbd> 打开开发者工具 → Network 选项卡 → 刷新页面。</li>
+                  <li>找到任一 XHR 请求（如 <code>browse</code>），右键 → Copy → Copy Request Headers。</li>
+                  <li>粘贴到下方「请求头」文本框并提交。或者导出 <code>cookies.txt</code>（Netscape 格式）粘贴到「cookies.txt」框。</li>
+                </ol>
+              </div>
+            </details>
+
+            <form id="ytm-auth-form" class="audio-form" aria-label="YouTube Music 认证配置">
+              <div class="form-section">
+                <div class="form-row">
+                  <label for="inp-proxy" class="form-label">代理地址（留空直连）</label>
+                  <input type="text" id="inp-proxy" class="text-input" name="proxy" placeholder="http://127.0.0.1:10808" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                  <label for="ta-headers" class="form-label">F12 请求头（粘贴整段）</label>
+                  <textarea id="ta-headers" class="form-textarea" name="raw_headers_or_cookie" rows="6" placeholder="粘贴来自 music.youtube.com 的 Request Headers…" spellcheck="false"></textarea>
+                </div>
+                <div class="form-row">
+                  <label for="ta-cookies" class="form-label">cookies.txt（Netscape 格式，选填）</label>
+                  <textarea id="ta-cookies" class="form-textarea" name="cookies_txt_content" rows="4" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / FALSE ..." spellcheck="false"></textarea>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">🔑 绑定 YouTube Music 账号</button>
+              </div>
+            </form>
+            <div id="ytm-auth-status" class="status-text" aria-live="polite"></div>
+          </section>
+
+          <!-- 兜底歌单设置 -->
+          <section aria-labelledby="fallback-heading" class="fallback-section">
+            <h2 id="fallback-heading" class="section-heading">帮派定时电台兜底歌单</h2>
+            <div class="form-row">
+              <label for="sel-playlists" class="form-label">个人歌单</label>
+              <select id="sel-playlists" class="form-select" aria-label="个人歌单列表">
+                <option value="">— 加载中 —</option>
+              </select>
+              <button type="button" id="btn-load-playlists" class="btn btn-sm">🔄 刷新歌单</button>
+            </div>
+            <div class="form-row">
+              <label for="inp-fallback-src" class="form-label">或输入歌单 URL / 搜索词</label>
+              <input type="text" id="inp-fallback-src" class="text-input" placeholder="https://music.youtube.com/playlist?list=... 或 search:古风经典" autocomplete="off" />
+            </div>
+            <div class="form-row">
+              <label for="sw-shuffle" class="form-label">随机洗牌</label>
+              <input type="checkbox" id="sw-shuffle" class="form-switch" name="shuffle" role="switch" checked />
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-set-fallback" class="btn btn-primary">📻 设为帮派电台兜底歌单</button>
+            </div>
+            <div id="fallback-status" class="status-text" aria-live="polite"></div>
+          </section>
+
+        </div>
+      </div>
+
+    </div><!-- .tabs-container -->
+  </main>
+
+  <!-- 全局提示 toast -->
+  <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

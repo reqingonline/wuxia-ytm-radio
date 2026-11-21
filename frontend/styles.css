@@ -1,0 +1,1112 @@
+/* =========================================================
+   天刀·帮派 24h 云音坊 — styles.css
+   dark-mode guide applied:
+   - color-scheme: dark light on :root (MANDATORY)
+   - light-dark() tokens for all color pairs
+   - accent-color for native form controls
+   - scrollbar-color for custom scrollbars
+   slider guide applied:
+   - appearance: none + cross-browser pseudo-elements
+   - --control-value synced by JS for fill gradient
+   tabs guide applied:
+   - [aria-selected="true"] underline via ::after pseudo-element
+   - hidden=until-found on panels (JS sets this)
+   - DO NOT put padding/border on panel element itself
+   dialog guide applied:
+   - dialog:modal overscroll-behavior: contain
+   - dialog::backdrop overflow: hidden + overscroll-behavior
+   ========================================================= */
+
+/* ── 1. Design Tokens ───────────────────────────────────── */
+:root {
+  /* dark-mode guide: MANDATORY – apply color-scheme to :root for viewport-wide theming */
+  color-scheme: dark light;
+
+  /* Palette (dark = default; this is a forced-dark console UI) */
+  --bg-page:        #0d1117;
+  --bg-surface:     #161b22;
+  --bg-surface-2:   #1c2430;
+  --bg-surface-3:   #21293a;
+  --border-color:   #30363d;
+  --border-accent:  #4a9eff;
+
+  /* Text */
+  --text-primary:   #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted:     #58677a;
+
+  /* Brand / Accent */
+  --accent:         #4a9eff;
+  --accent-hover:   #6ab4ff;
+  --accent-dark:    #1a4a7a;
+
+  /* Status */
+  --color-ok:       #3fb950;
+  --color-warn:     #d29922;
+  --color-danger:   #f85149;
+  --color-danger-soft: rgba(248, 81, 73, 0.15);
+
+  /* Meter */
+  --meter-bg:       #1c2430;
+  --meter-green:    #3fb950;
+  --meter-yellow:   #d29922;
+  --meter-red:      #f85149;
+
+  /* Sizes */
+  --player-height:  80px;
+  --tab-h:          42px;
+  --radius:         6px;
+  --radius-lg:      10px;
+
+  /* dark-mode guide: accent-color for native controls */
+  accent-color: var(--accent);
+
+  /* dark-mode guide: scrollbar-color */
+  scrollbar-color: #3a4455 #161b22;
+  scrollbar-width: thin;
+}
+
+/* slider guide: DO NOT combine WebKit and Firefox pseudo-selectors into one rule */
+/* Slider custom property registration (for JS-driven fill) */
+@property --slider-progress {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+/* ── 2. Reset & Base ─────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-size: 14px;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 3. Player Bar ──────────────────────────────────────── */
+.player-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, #131920 0%, #0d1117 100%);
+  border-bottom: 1px solid var(--border-color);
+  min-height: var(--player-height);
+}
+
+/* Cover thumbnail */
+.cover-thumb {
+  width: 72px; height: 72px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  background: var(--bg-surface-2);
+  flex-shrink: 0;
+}
+.cover-thumb[src=""] {
+  /* placeholder pattern */
+  background: linear-gradient(135deg, #1e2d3d 0%, #2a3a4d 100%);
+}
+
+/* Track info */
+.track-info {
+  overflow: hidden;
+}
+.track-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-artist {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-source {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-dark);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* Progress wrap */
+.progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+.progress-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  letter-spacing: .03em;
+}
+
+/* ── 4. Range Slider (slider guide applied) ──────────────── */
+/* slider guide: Use native <input type="range"> with custom pseudo-elements */
+/* slider guide: Keep separate WebKit and Firefox rule blocks */
+
+.seek-slider,
+.form-slider {
+  --slider-track-size: 4px;
+  --slider-thumb-size: 14px;
+  --slider-track-color: var(--bg-surface-3);
+  --slider-fill-color:  var(--accent);
+  --slider-thumb-color: var(--accent);
+  --slider-track-radius: 999px;
+  --slider-thumb-radius: 50%;
+  /* slider guide: sync --control-value from JS; fallback calc for unsupported progress() */
+  --control-value: 0;
+  --attr-min: 0;
+  --attr-max: 100;
+  --slider-progress: calc(
+    (var(--control-value) - var(--attr-min)) /
+    (var(--attr-max) - var(--attr-min)) * 100%
+  );
+
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 100%;
+  block-size: 2.5rem;
+  margin: 0; padding: 0; border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* WebKit/Blink track */
+.seek-slider::-webkit-slider-runnable-track,
+.form-slider::-webkit-slider-runnable-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: linear-gradient(
+    to right,
+    var(--slider-fill-color) var(--slider-progress),
+    var(--slider-track-color) var(--slider-progress)
+  );
+}
+
+/* WebKit/Blink thumb */
+.seek-slider::-webkit-slider-thumb,
+.form-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+  border: 0;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+  transition: transform .1s;
+}
+.seek-slider::-webkit-slider-thumb:hover,
+.form-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Firefox track */
+.seek-slider::-moz-range-track,
+.form-slider::-moz-range-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-track-color);
+}
+
+/* Firefox progress */
+.seek-slider::-moz-range-progress,
+.form-slider::-moz-range-progress {
+  block-size: var(--slider-track-size);
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-fill-color);
+}
+
+/* Firefox thumb */
+.seek-slider::-moz-range-thumb,
+.form-slider::-moz-range-thumb {
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  border: 0;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+}
+
+/* slider guide: visible keyboard focus indicator */
+.seek-slider:focus-visible,
+.form-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.slider-val {
+  min-width: 60px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ── 5. Control Buttons ─────────────────────────────────── */
+.ctrl-btns {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.ctrl-btn:hover {
+  background: var(--bg-surface-3);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ctrl-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ctrl-btn--toggle[aria-pressed="true"] {
+  background: var(--accent-dark);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ctrl-btn--warn {
+  border-color: var(--color-warn);
+  color: var(--color-warn);
+}
+.ctrl-btn--warn:hover {
+  background: rgba(210,153,34,.15);
+}
+
+/* ── 6. Meter Panel ─────────────────────────────────────── */
+.meter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.meter-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 70px;
+  white-space: nowrap;
+}
+.meter-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: var(--meter-bg);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.meter-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--meter-green) 0%, var(--meter-yellow) 70%, var(--meter-red) 90%);
+  transition: width .08s linear;
+}
+.meter-val {
+  font-size: 10px;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.meter-unit {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.ducking-indicator {
+  font-size: 10px;
+  color: var(--color-warn);
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity .2s;
+  white-space: nowrap;
+}
+.ducking-indicator.active {
+  opacity: 1;
+}
+
+/* ── 7. Tabs (tabs guide applied) ──────────────────────── */
+/* tabs guide: tablist is a flex scroll container */
+.tabs-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tablist-wrap {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none; /* hide scrollbar for clean look */
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+.tablist-wrap::-webkit-scrollbar { display: none; }
+
+/* tabs guide: use <button> for tabs */
+.tab {
+  position: relative;      /* for ::after underline */
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s;
+}
+.tab:hover {
+  color: var(--text-primary);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* tabs guide: MANDATORY – indicate selected tab with ::after underline, NOT color alone (WCAG 1.4.1) */
+/* tabs guide: DO NOT apply styling that changes dimensions */
+[aria-selected="true"].tab {
+  color: var(--accent);
+}
+[aria-selected="true"].tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 3px solid var(--accent);
+}
+
+/* tabs guide: DO NOT put padding/border/background on panel element itself */
+/* tabs guide: MANDATORY – render initial state in HTML (hidden on every panel except selected) */
+.tab-panel {
+  /* No padding/border here – put them in .panel-inner */
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.tab-panel[hidden] {
+  flex: 0 0 0;
+  overflow: hidden;
+}
+
+/* tabs guide: hidden=until-found panels still layout – put styles on child wrapper */
+.panel-inner {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── 8. Main Layout ─────────────────────────────────────── */
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--player-height));
+  overflow: hidden;
+}
+
+/* ── 9. Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-surface-3); border-color: var(--border-accent); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .45; cursor: default; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+.btn-secondary { /* inherits .btn defaults */ }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+.btn-danger:hover { opacity: .85; }
+.btn-danger-soft {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+/* ── 10. Text Inputs ────────────────────────────────────── */
+.text-input {
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+.text-input:focus { border-color: var(--accent); }
+.text-input::placeholder { color: var(--text-muted); }
+.text-input--sm { width: auto; flex: 0 0 160px; }
+
+.form-textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-family: "Consolas", monospace;
+  font-size: 12px;
+  resize: vertical;
+  width: 100%;
+  outline: none;
+  transition: border-color .15s;
+}
+.form-textarea:focus { border-color: var(--accent); }
+
+.form-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+.form-select:focus { border-color: var(--accent); }
+
+/* Switch (role="switch") + native HTML [switch] support */
+input[type="checkbox"][switch] {
+  accent-color: var(--accent);
+}
+.form-switch {
+  width: 42px; height: 24px;
+  appearance: none; -webkit-appearance: none;
+  accent-color: var(--accent);
+  border: 2px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-surface-3);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background .2s, border-color .2s;
+}
+.form-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform .2s, background .2s;
+}
+.form-switch:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.form-switch:checked::after {
+  transform: translateX(18px);
+  background: #fff;
+}
+.form-switch:focus-visible,
+input[type="checkbox"][switch]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* ── 11. Section Headings ────────────────────────────────── */
+.section-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-heading-row .section-heading { margin-bottom: 0; border-bottom: 0; }
+
+/* ── 12. LAN Banner ─────────────────────────────────────── */
+.lan-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.lan-tip { font-size: 11px; color: var(--text-muted); }
+
+/* ── 13. Queue Layout ───────────────────────────────────── */
+.queue-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+}
+@media (max-width: 800px) {
+  .queue-layout { grid-template-columns: 1fr; }
+}
+
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.add-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.queue-section, .history-section { margin-top: 8px; }
+
+/* Queue list */
+.queue-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.queue-item-idx {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: right;
+}
+.queue-item-info { flex: 1; overflow: hidden; }
+.queue-item-title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500;
+}
+.queue-item-artist {
+  font-size: 11px; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.queue-item-requester {
+  font-size: 10px; color: var(--text-muted);
+}
+.queue-item-actions {
+  display: flex; gap: 4px; flex-shrink: 0;
+}
+
+/* History list */
+.history-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.history-item-title { font-weight: 500; color: var(--text-primary); }
+
+/* ── 14. YTMusic Search Results ─────────────────────────── */
+.search-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.search-form .text-input { flex: 1; }
+
+.ytm-results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.ytm-result-card {
+  padding: 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.ytm-result-card:hover { border-color: var(--accent); }
+.ytm-result-title { font-weight: 500; font-size: 13px; }
+.ytm-result-artist { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+.ytm-result-meta { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
+.ytm-result-actions { display: flex; gap: 6px; }
+
+/* ── 15. Status Banners ─────────────────────────────────── */
+.status-banner {
+  padding: 12px 16px;
+  border: 1px solid var(--color-warn);
+  border-radius: var(--radius);
+  background: rgba(210,153,34,.08);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.status-banner--ok {
+  border-color: var(--color-ok);
+  background: rgba(63,185,80,.08);
+}
+.install-steps {
+  margin: 8px 0 0 20px;
+}
+.install-steps li { margin-bottom: 4px; }
+
+/* ── 16. Audio Form ─────────────────────────────────────── */
+.audio-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-section {
+  padding: 14px 16px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.form-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.form-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 140px;
+  flex-shrink: 0;
+}
+.slider-row .form-label { min-width: 120px; }
+.slider-row .form-slider { flex: 1; }
+.form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── 17. Topology SVG ───────────────────────────────────── */
+.topo-details { margin: 0; }
+.topo-details summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topo-details summary::before { content: "▶"; font-size: 10px; transition: transform .2s; }
+.topo-details[open] summary::before { transform: rotate(90deg); }
+
+.topo-figure { overflow-x: auto; }
+.topo-svg {
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  display: block;
+}
+.topo-caption {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* ── 18. OCR Panel ──────────────────────────────────────── */
+.ocr-windows-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.canvas-section { display: flex; flex-direction: column; gap: 8px; }
+.canvas-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.canvas-tip { font-size: 12px; color: var(--text-muted); }
+.canvas-wrap {
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+  cursor: crosshair;
+  max-width: 100%;
+}
+#screenshot-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  user-select: none;
+}
+.canvas-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.roi-info { font-size: 12px; color: var(--text-secondary); min-height: 18px; }
+.roi-preview-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.roi-preview-img {
+  max-width: 320px; max-height: 180px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.ocr-form { margin-top: 8px; }
+
+.ocr-test-section { display: flex; flex-direction: column; gap: 8px; }
+.hint-text { font-size: 12px; color: var(--text-muted); }
+
+.result-pre {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-family: "Consolas", monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ocr-log-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ocr-log-item {
+  padding: 6px 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ocr-log-time { color: var(--text-muted); min-width: 60px; font-variant-numeric: tabular-nums; }
+.ocr-log-type { color: var(--accent); font-weight: 600; min-width: 36px; }
+.ocr-log-content { flex: 1; color: var(--text-secondary); word-break: break-all; }
+
+/* ── 19. YTM Auth Panel ─────────────────────────────────── */
+.auth-guide {
+  margin-bottom: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+.auth-guide summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.guide-body {
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.guide-body ol { padding-left: 18px; }
+.guide-body kbd {
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.status-text { font-size: 12px; color: var(--text-secondary); min-height: 18px; }
+.status-text.ok { color: var(--color-ok); }
+.status-text.err { color: var(--color-danger); }
+
+.fallback-section { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── 20. Dialog (dialog guide applied) ─────────────────── */
+/* dialog guide: style dialog[open] only, not dialog unconditionally */
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 28px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  min-width: 320px;
+  max-width: 90vw;
+}
+/* dialog guide: MANDATORY – both rules prevent scroll chaining */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(3px);
+}
+
+dialog h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-warn);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── 21. Toast Notifications ────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 320px;
+}
+.toast {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-primary);
+  pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  animation: toast-in .2s ease;
+}
+.toast.ok { border-left: 3px solid var(--color-ok); }
+.toast.warn { border-left: 3px solid var(--color-warn); }
+.toast.err { border-left: 3px solid var(--color-danger); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 22. Misc utilities ─────────────────────────────────── */
+code {
+  font-family: "Consolas", monospace;
+  background: var(--bg-surface-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: .9em;
+}
+
+/* ── 23. Scheduled Broadcast Banner ─────────────────────── */
+.schedule-banner {
+  padding: 10px 14px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.schedule-banner--standby {
+  border-color: var(--text-muted);
+  background: rgba(88, 103, 122, 0.08);
+}
+.schedule-banner--live {
+  border-color: var(--color-ok);
+  background: rgba(63, 185, 80, 0.10);
+}
+.schedule-banner--override {
+  border-color: var(--color-warn);
+  background: rgba(210, 153, 34, 0.10);
+}
+.schedule-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-status-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.schedule-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+.schedule-summary:hover { color: var(--text-primary); }
+.schedule-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.schedule-days-row, .schedule-time-row {
+  flex-wrap: wrap;
+}
+.weekday-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.weekday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-surface-3);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.weekday-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-dark);
+  color: var(--text-primary);
+}
+.weekday-chip input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.time-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.text-input--time {
+  width: 118px;
+}
+.time-sep {
+  color: var(--text-muted);
+}

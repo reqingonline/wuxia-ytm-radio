@@ -1,0 +1,17 @@
+# Python & virtual environment
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Runtime secrets, personal config, audio cache, drivers, and trash archive
+data/*
+!data/config.example.json
+_待删除/
+
+# OS / Editor / Logs
+.DS_Store
+Thumbs.db
+*.log
+*.tmp

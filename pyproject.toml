@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wuxia-ytm-radio"
+version = "0.1.0"
+description = "天涯明月刀手游帮派语音点歌台 — YouTube Music 双路隔离推流、防炸麦软限幅、自动闪避混音与帮派聊天 OCR 自动点歌系统"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Wuxia Guild Radio Team" }
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "ytmusicapi>=1.7.0",
+    "yt-dlp>=2024.0.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.26.0",
+    "imageio-ffmpeg>=0.5.1",
+    "mss>=9.0.1",
+    "Pillow>=10.0.0",
+    "rapidocr-onnxruntime>=1.3.0",
+    "opencv-python>=4.8.0",
+    "pywin32>=306; sys_platform == 'win32'",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"

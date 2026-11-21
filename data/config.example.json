@@ -1,0 +1,54 @@
+{
+  "auto_dj_enabled": true,
+  "fallback_source": "search:天涯明月刀 古风 经典",
+  "fallback_shuffle": true,
+  "cache_max_mb": 1024,
+  "proxy": "",
+  "audio": {
+    "virtual_out_device_id": null,
+    "monitor_out_device_id": null,
+    "mic_in_device_id": null,
+    "broadcast_volume": 0.85,
+    "monitor_enabled": true,
+    "monitor_volume": 0.7,
+    "mic_bridge_enabled": false,
+    "mic_volume": 1.0,
+    "ducking_enabled": true,
+    "duck_threshold_db": -38.0,
+    "ducking_db": -12.0
+  },
+  "ocr": {
+    "enabled": false,
+    "roi": {
+      "left": 20,
+      "top": 680,
+      "width": 520,
+      "height": 280
+    },
+    "auto_track_window": true,
+    "interval_sec": 30.0,
+    "peak_schedule": {
+      "enabled": true,
+      "days": [3, 6],
+      "start": "19:30",
+      "end": "20:20",
+      "active_interval_sec": 8.0
+    },
+    "trigger_mode": "prefix",
+    "cooldown_sec": 300.0,
+    "allow_skip_cmd": true
+  },
+  "ytmusic": {
+    "proxy": "",
+    "fallback_source": "search:天涯明月刀 古风 经典",
+    "fallback_shuffle": true,
+    "cache_max_mb": 1024
+  },
+  "broadcast_schedule": {
+    "enabled": true,
+    "days": [3, 6],
+    "start": "19:30",
+    "end": "20:20",
+    "clear_queue_on_end": true
+  }
+}
